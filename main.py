@@ -13,7 +13,6 @@ def on_mouse(event, x, y, flags, param):
     if event == cv2.EVENT_MOUSEMOVE:
         mouse_x, mouse_y = x, y
 
-img = np.zeros((600, 800, 3), dtype=np.uint8)
 win_name = "Mouse Tracker"
 cv2.namedWindow(win_name)
 
