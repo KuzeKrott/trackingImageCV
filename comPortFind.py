@@ -11,6 +11,10 @@ class ComPortApp:
         self.selected_src_com = ""
         self.selected_dst_com = ""
 
+        # ---- координаты фигуры ----
+        self.current_x = None
+        self.current_y = None
+
         # ---- геометрия положения окна ----
         self._setup_geometry()
 
@@ -122,8 +126,12 @@ class ComPortApp:
             data = self.serial.readline()
             if data:
                 text = data.decode("utf-8", errors="ignore").strip()
-                print("Received:", text)
-                self.log_message(f"Received: {text}")
+                coords = self.parse_string(text)
+                if coords:
+                    print("Parsed coords:", coords)
+                    self.log_message(f"Coords in vars: X={self.current_x}, Y={self.current_y}")
+
+                self.log_message(f"Received text: {text}")
         except Exception as e:
             print("Read error:", e)
 
@@ -133,10 +141,30 @@ class ComPortApp:
             print("Port not opened")
             return
 
-        self.serial.write(b"HELLO FROM PYTHON\n")
+        self.serial.write(b"G1 X10 Y5\n")
         print("Sent test message")
         self.read_from_port()
         self.close_port()
+
+    def parse_string(self, text: str) -> dict:
+        result = {}
+        parts = text.split()
+        for part in parts:
+            if part.startswith('X'):
+                try:
+                    self.current_x = float(part[1:])
+                    result['X'] = self.current_x
+                except ValueError:
+                    pass
+            elif part.startswith('Y'):
+                try:
+                    self.current_y = float(part[1:])
+                    result['Y'] = self.current_y
+                except ValueError:
+                    pass
+        return result
+
+
 
 # ------------------------
 # Точка входа
