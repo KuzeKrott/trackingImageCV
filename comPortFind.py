@@ -1,69 +1,147 @@
-from tkinter import *
+import tkinter as tk
 from tkinter import ttk
 import serial.tools.list_ports
 
+class ComPortApp:
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.root.title("Mouse Tracker")
 
-selectedSrcCom = ""
-selectedDstCom = ""
-def onSelectSrc(event):
-    global selectedSrcCom
-    selectedSrcCom = combo.get()
-    print("Selected: ", selectedSrcCom)
+        # ---- состояние ----
+        self.selected_src_com = ""
+        self.selected_dst_com = ""
 
-root = Tk()
-root.title("Mouse Tracker")
-screenWidth = root.winfo_screenwidth()
-screenHeight = root.winfo_screenheight()
-windowPosX = screenWidth // 2 - 400
-windowPosY = screenHeight // 2 - 300
-root.geometry(f"800x600+{windowPosX}+{windowPosY}")
-portsMount = 0
-frm = ttk.Frame(root, padding=20)
-frm.grid()
+        # ---- геометрия положения окна ----
+        self._setup_geometry()
 
-comPorts = []
-options = []
+        # ---- интерфейс ----
+        self._create_widgets()
 
-combo = ttk.Combobox(frm, values=options)
-combo.grid(column=1, row=0)
+        # ---- загрузка COM-портов ----
+        self._load_com_ports()
 
-ports = serial.tools.list_ports.comports()
-for port in ports:
-    comPorts.append(port.device)
-    print("added com port: ", port.device) #, port.description, port.hwid)
+    # ------------------------
+    # Настройка окна
+    # ------------------------
+    def _setup_geometry(self):
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        x = screen_w // 2 - 400
+        y = screen_h // 2 - 300
+        self.root.geometry(f"800x600+{x}+{y}")
 
-current_values = list(combo['values'] or [])
-for item in comPorts:
-    current_values.append(item)
-print("current values: ", current_values)
+    # ------------------------
+    # Создание виджетов
+    # ------------------------
+    def _create_widgets(self):
+        self.frame = ttk.Frame(self.root, padding=20)
+        self.frame.grid()
 
-combo['values'] = current_values
-combo.current(0)
+        # Метки
+        ttk.Label(self.frame, text="Choose source port").grid(column=0, row=0, sticky="w")
+        #ttk.Label(self.frame, text="Choose destination port").grid(column=0, row=1, sticky="w")
 
-combo.bind("<<ComboboxSelected>>", onSelectSrc)
+        # Combobox src
+        self.src_combo = ttk.Combobox(self.frame, values=[])
+        self.src_combo.grid(column=1, row=0)
+        self.src_combo.bind("<<ComboboxSelected>>", self.on_select_src)
 
-Label(
-    frm, 
-    text="Choose source port"
-).grid(column=0, row=0)
-Label(
-    frm, 
-    text="Choose destination port"
-).grid(column=0, row=1)
-Button(
-    frm,
-    text="test",
-    width=10,
-    height=2,
-).grid(column=4, row=0, padx=2, pady=1)
+        # # Combobox dst
+        # self.dst_combo = ttk.Combobox(self.frame, values=[])
+        # self.dst_combo.grid(column=1, row=1)
+        # self.dst_combo.bind("<<ComboboxSelected>>", self.on_select_dst)
 
-#ttk.Label(frm, text = "Hello World!").grid(column = 0, row = 0)
-Button(
-    frm, 
-    text = "Quit", 
-    width=10,
-    height=2,
-    command = root.destroy
-).grid(column = 4, row = 1, padx=2, pady=1)
+        # окно вывода сообщений
+        self.log = tk.Text(self.frame, width=60, height=10)
+        self.log.grid(column=0, row=3, columnspan=4)
 
-root.mainloop()
+        # Кнопки
+        ttk.Button(
+            self.frame,
+            text="Quit",
+            width=20,
+            command=self.root.destroy
+        ).grid(column=1, row=10, padx=2, pady=1)
+
+        ttk.Button(
+            self.frame,
+            text="send&read",
+            width=16,
+            command=self.send_read_test_message
+        ).grid(column=1, row=4, padx=2, pady=1)
+
+    # ------------------------
+    # Логика
+    # ------------------------
+    def _load_com_ports(self):
+        ports = serial.tools.list_ports.comports()
+        com_ports = [p.device for p in ports]
+
+        self.src_combo["values"] = com_ports
+        #self.dst_combo["values"] = com_ports
+
+        if com_ports:
+            self.src_combo.current(0)
+            #self.dst_combo.current(0)
+            self.selected_src_com = com_ports[0]
+            self.selected_dst_com = com_ports[0]
+
+    def on_select_src(self, event=None):
+        self.selected_src_com = self.src_combo.get()
+        print("Selected src:", self.selected_src_com)
+
+    # def on_select_dst(self, event=None):
+    #     self.selected_dst_com = self.dst_combo.get()
+    #     print("Selected dst:", self.selected_dst_com)
+
+    def log_message(self, text):
+        self.log.insert(tk.END, text + "\n")
+        self.log.see(tk.END)
+
+    def open_port(self):
+        try:
+            self.serial = serial.Serial(
+                port=self.selected_src_com,
+                baudrate=9600,
+                timeout=1
+            )
+            print("Port opened:", self.selected_src_com)
+        except Exception as e:
+            print("Error opening port:", e)
+
+    def close_port(self):
+        if hasattr(self, "serial") and self.serial.is_open:
+            self.serial.close()
+            print("Port closed")
+
+    def read_from_port(self):
+        if not hasattr(self, "serial") or not self.serial.is_open:
+            print("Port not opened")
+            return
+        try:
+            data = self.serial.readline()
+            if data:
+                text = data.decode("utf-8", errors="ignore").strip()
+                print("Received:", text)
+                self.log_message(f"Received: {text}")
+        except Exception as e:
+            print("Read error:", e)
+
+    def send_read_test_message(self):
+        self.open_port()
+        if not hasattr(self, "serial") or not self.serial.is_open:
+            print("Port not opened")
+            return
+
+        self.serial.write(b"HELLO FROM PYTHON\n")
+        print("Sent test message")
+        self.read_from_port()
+        self.close_port()
+
+# ------------------------
+# Точка входа
+# ------------------------
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ComPortApp(root)
+    root.mainloop()
