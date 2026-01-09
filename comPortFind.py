@@ -2,6 +2,14 @@ from tkinter import *
 from tkinter import ttk
 import serial.tools.list_ports
 
+
+selectedSrcCom = ""
+selectedDstCom = ""
+def onSelectSrc(event):
+    global selectedSrcCom
+    selectedSrcCom = combo.get()
+    print("Selected: ", selectedSrcCom)
+
 root = Tk()
 root.title("Mouse Tracker")
 screenWidth = root.winfo_screenwidth()
@@ -9,23 +17,30 @@ screenHeight = root.winfo_screenheight()
 windowPosX = screenWidth // 2 - 400
 windowPosY = screenHeight // 2 - 300
 root.geometry(f"800x600+{windowPosX}+{windowPosY}")
+portsMount = 0
 frm = ttk.Frame(root, padding=20)
 frm.grid()
 
-def on_select(event):
-    print("Выбрано:", combo.get())
+comPorts = []
 options = []
-
-
 
 combo = ttk.Combobox(frm, values=options)
 combo.grid(column=1, row=0)
-combo.current(0)
-combo.bind("<<ComboboxSelected>>", on_select)
 
 ports = serial.tools.list_ports.comports()
 for port in ports:
-    print(port.device, port.description, port.hwid)
+    comPorts.append(port.device)
+    print("added com port: ", port.device) #, port.description, port.hwid)
+
+current_values = list(combo['values'] or [])
+for item in comPorts:
+    current_values.append(item)
+print("current values: ", current_values)
+
+combo['values'] = current_values
+combo.current(0)
+
+combo.bind("<<ComboboxSelected>>", onSelectSrc)
 
 Label(
     frm, 
