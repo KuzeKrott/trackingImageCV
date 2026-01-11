@@ -1,48 +1,93 @@
-import cv2
-import numpy as np
 import ctypes
-from comPortFind import ComPortApp
 import tkinter as tk
+from tkinter import ttk
 
-root = tk.Tk()
-app = ComPortApp(root)
+import cv2
+from PIL import Image, ImageTk
 
-ctypes.windll.user32.ShowCursor(False)
-mouse_x, mouse_y = 0, 0
-figureSize = 50
-video_capture = cv2.VideoCapture(0)
 
-# def coord_listener(x, y):
-#     print(f"[Listener] Current coordinates: X={x}, Y={y}")
+class MouseTrackerApp:
+    def __init__(self, root: tk.Tk, camera_index: int = 0, figure_size: int = 50) -> None:
+        self.root = root
+        self.cap = cv2.VideoCapture(camera_index)
 
-#callback
-def on_mouse(event, x, y, flags, param):
-    global mouse_x, mouse_y
-    if event == cv2.EVENT_MOUSEMOVE:
-        mouse_x, mouse_y = x, y
-        
+        ret, frame = self.cap.read()
+        if not ret:
+            raise RuntimeError("Camera error")
 
-win_name = "Mouse Tracker"
-cv2.namedWindow(win_name)
-cv2.setMouseCallback(win_name, on_mouse)
+        self.h, self.w = frame.shape[:2]
+        self.half = figure_size // 2
 
-half = figureSize//2
-while True:
-    result, display = video_capture.read()  # read frames from the video
-    cv2.rectangle(display, 
-                  (mouse_x - half, mouse_y - half), 
-                  (mouse_x + half, mouse_y + half), 
-                  (255, 0, 0), 
-                  5)
+        self.mouse_x = 0
+        self.mouse_y = 0
+        self.running = True
 
-    cv2.putText(display, f"Coordinate: X={mouse_x}, Y={mouse_y}", (10, 450),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (23, 187, 76), 2)
-    cv2.imshow(win_name, display)
+        self.canvas = tk.Canvas(root, width=self.w, height=self.h, highlightthickness=0)
+        self.label = ttk.Label(root, text="Coordinate: X=0, Y=0")
 
-    if cv2.waitKey(20) & 0xFF == 27: 
-        # app.send_read_test_message("G1 X10 Y20")
-        break
+        self.canvas.pack()
+        self.label.pack(pady=6)
 
-ctypes.windll.user32.ShowCursor(True)
-video_capture.release()
-cv2.destroyAllWindows()
+        self.canvas.bind("<Motion>", self._on_mouse_move)
+        self.canvas.bind("<Enter>", self._hide_cursor)
+        self.canvas.bind("<Leave>", self._show_cursor)
+
+        self.root.protocol("WM_DELETE_WINDOW", self._close)
+
+        self._update_frame()
+
+    # -------------------------------------------------------------
+
+    def _hide_cursor(self, _event=None) -> None:
+        ctypes.windll.user32.ShowCursor(False)
+
+    def _show_cursor(self, _event=None) -> None:
+        ctypes.windll.user32.ShowCursor(True)
+
+    def _on_mouse_move(self, event: tk.Event) -> None:
+        self.mouse_x = event.x
+        self.mouse_y = event.y
+        self.label.config(text=f"Coordinate: X={self.mouse_x}, Y={self.mouse_y}")
+
+    # -------------------------------------------------------------
+
+    def _update_frame(self) -> None:
+        if not self.running:
+            return
+
+        ret, frame = self.cap.read()
+        if not ret:
+            self.root.after(20, self._update_frame)
+            return
+
+        cv2.rectangle(
+            frame,
+            (self.mouse_x - self.half, self.mouse_y - self.half),
+            (self.mouse_x + self.half, self.mouse_y + self.half),
+            (255, 0, 0),
+            2,
+        )
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self.photo = ImageTk.PhotoImage(Image.fromarray(frame))
+
+        self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
+        self.root.after(20, self._update_frame)
+
+    # -------------------------------------------------------------
+
+    def _close(self) -> None:
+        self.running = False
+        self.cap.release()
+        self._show_cursor()
+        self.root.destroy()
+
+
+def main() -> None:
+    root = tk.Tk()
+    MouseTrackerApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
